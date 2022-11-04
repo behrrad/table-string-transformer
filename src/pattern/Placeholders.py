@@ -75,8 +75,8 @@ def get_placeholders(rows, max_tokens, token_splitters=None, verbose=True, optio
             #     print(p)
             # print("*****************************")
         # break
-    if verbose:
-        print(f"{sum_init_pat} init patterns + {sum_spt_pat} splitted patterns = {sum_init_pat+sum_spt_pat}, {len(all_patterns)} unique, extracted from {cnt} input rows")
+    # if verbose:
+    #     print(f"{sum_init_pat} init patterns + {sum_spt_pat} splitted patterns = {sum_init_pat+sum_spt_pat}, {len(all_patterns)} unique, extracted from {cnt} input rows")
 
 
     stats['cnt_all_generated_placeholder_comb'] = sum_init_pat+sum_spt_pat+sum_removed_init_pat + sum_removed_splitted_pat

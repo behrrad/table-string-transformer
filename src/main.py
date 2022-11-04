@@ -5,6 +5,7 @@ import os
 import random
 import shutil
 import sys
+import time
 
 from data_processor import DataLoader as dl
 from data_processor import Matcher as matcher
@@ -74,6 +75,120 @@ CNT_CUR = multiprocessing.Value('i', 0)
 CNT_ALL = 0
 
 
+def lcs(s1, s2):
+    m = len(s1)
+    n = len(s2)
+    counter = [[0] * (n + 1) for x in range(m + 1)]
+    longest = 0
+    lcs_set = set()
+    for i in range(m):
+        for j in range(n):
+            if s1[i] == s2[j]:
+                c = counter[i][j] + 1
+                counter[i + 1][j + 1] = c
+                if c > longest:
+                    lcs_set = set()
+                    longest = c
+                    lcs_set.add(s1[i - c + 1:i + 1])
+                elif c == longest:
+                    lcs_set.add(s1[i - c + 1:i + 1])
+
+    return list(lcs_set)[0] if len(list(lcs_set)) > 0 else ''
+
+
+def pairs_finder(tables):
+    pairs = {}
+    for data_set in tables:
+        pairs[data_set] = []
+        src = "source-" + tables[data_set]['rows']['src']
+        target = "target-" + tables[data_set]['rows']['target']
+        src_index = tables[data_set]['GT']['titles'].index(src) if src in tables[data_set]['GT']['titles'] else -1
+        target_index = tables[data_set]['GT']['titles'].index(target) if \
+            target in tables[data_set]['GT']['titles'] else -1
+        for item in tables[data_set]['GT']['items']:
+            inp = item[src_index].replace(" ", "") if \
+                len(item[src_index].replace(" ", "")) >= len(item[target_index].replace(" ", "")) else \
+                item[target_index].replace(" ", "")
+            output = item[target_index].replace(" ", "") if item[target_index].replace(" ", "") != inp else \
+                item[src_index].replace(" ", "")
+            pairs[data_set].append([inp, output])
+    return pairs
+
+
+def code_pair(src, target):
+    if src == '' and target == '':
+        return ''
+    if src == '':
+        return '2'
+    if target == '':
+        return '0'
+    longest = lcs(src, target)
+    if longest and len(longest) > 1:
+        next_src = src.split(longest, 1)
+        next_target = target.split(longest, 1)
+        output = '1'
+        output = code_pair(next_src[0], next_target[0]) + output
+        output = output + code_pair(next_src[1], next_target[1])
+        return output
+    return "02"
+
+
+def generate_codes(pairs):
+    for data_set in pairs:
+        for pair in pairs[data_set]:
+            pair.append(code_pair(pair[0], pair[1]))
+    return pairs
+
+
+def update_mapper(pattern, pairs, mapper):
+    for pair in pairs:
+        code = code_pair(pair[0], pair[1])
+        if code not in mapper:
+            mapper[code] = []
+        if pattern not in mapper[code]:
+            mapper[code].append(pattern)
+
+
+def get_pattern_to_code_mapper(patterns, pairs):
+    assert len(patterns) == len(pairs)
+    pattern_to_code_mapper = {}
+    for idx in range(len(patterns)):
+        update_mapper(patterns[idx], pairs[idx], pattern_to_code_mapper)
+    return pattern_to_code_mapper
+
+
+def split_rows(rows):
+    train_rows = {}
+    test_rows = {}
+    for row in rows:
+        rnd = random.random()
+        if rnd > 0.3:
+            train_rows[row] = rows[row]
+        else:
+            test_rows[row] = rows[row]
+    return train_rows, test_rows
+
+
+def find_pattern_for_pair(pattern_to_code_mapper, src, target):
+    code = code_pair(src, target)
+    if code not in pattern_to_code_mapper:
+        return 0
+    for pattern in pattern_to_code_mapper[code]:
+        if pattern.apply(src) == target:
+            return 1
+    return 0
+
+
+def check_method(pattern_to_code_mapper, test_rows):
+    success = 0
+    for row in test_rows:
+        for i in range(len(list(test_rows[row]))):
+            success += find_pattern_for_pair(pattern_to_code_mapper, row, list(test_rows[row])[i])
+    print("success: " + str(success))
+    print("total: " + str(len(test_rows)))
+    print("success rate: " + str(success/len(test_rows)*100) + "%")
+
+
 def get_pattern(func, params, verbose=False):
     lst = []
     '''
@@ -88,8 +203,8 @@ def get_pattern(func, params, verbose=False):
 
     tables, all_tables = dl.get_tables_from_dir(DS_PATH, lst, make_lower=True, verbose=False)
 
-    print("Reading Done!")
-
+    pairs = pairs_finder(tables)
+    pairs = generate_codes(pairs)
     res = matcher.get_matching_tables_golden(tables, bidi=False)
 
     ''' This Part is for experimental column matching, still not complete and should be commented:
@@ -141,7 +256,7 @@ def get_pattern(func, params, verbose=False):
     all_has_gt = True
 
     for item in res['items']:
-        print(f"Matching rows for '{item['src_table']}' ...")
+        # print(f"Matching rows for '{item['src_table']}' ...")
         has_GT = 'GT' in tables[item['src_table'][4:]]
         all_has_gt = all_has_gt and has_GT
 
@@ -152,8 +267,9 @@ def get_pattern(func, params, verbose=False):
 
             rows, is_swapped = matcher.get_matching_rows_golden(tables, item, swap_src_target=SWAP_SRC_TARGET)
         else:
-            rows, is_swapped = matcher.get_matching_rows_for_table(tables, item, ROW_MATCHING_N_START, ROW_MATCHING_N_END,
-                                                         swap_src_target=SWAP_SRC_TARGET)
+            rows, is_swapped = matcher.get_matching_rows_for_table(tables, item, ROW_MATCHING_N_START,
+                                                                   ROW_MATCHING_N_END,
+                                                                   swap_src_target=SWAP_SRC_TARGET)
         if verbose:
             print(f"source and target columns are {'' if is_swapped else 'NOT '}swapped")
         new_rows = {}
@@ -170,8 +286,7 @@ def get_pattern(func, params, verbose=False):
         rmu = None
         if has_GT:
             rmu = RowMatcherUnit(tables, rr)
-            print(rmu)
-
+            # print(rmu)
         if func == 'run_pattern' and params['sample_size'] is not None:
             subset_size = params['sample_size']
             if not isinstance(subset_size, (list, tuple, set,)):
@@ -204,16 +319,18 @@ def get_pattern(func, params, verbose=False):
                                     rmu, verbose=verbose)
         else:
             if MULTI_CORE:
-                data.append((item, rows, params, tables, None, rmu, verbose))
+                # print(verbose)
+                data.append((item, rows, params, tables, None, rmu, verbose,
+                             res['items'].index(item) == len(res['items']) - 1))
             else:
                 globals()[func](item, rows, params, tables, None, rmu, verbose=verbose)
 
     if all_has_gt and len(all_rows) > 0:
         rme = RowMatcherEval(tables, all_rows)
-        print("Row matching performance:" + str(rme))
+        # print("Row matching performance:" + str(rme))
 
     if MULTI_CORE:
-        print(f"Using {NUM_PROCESSORS} processes...")
+        # print(f"Using {NUM_PROCESSORS} processes...")
 
         # @TODO: Support spawn
         if sys.platform in ('win32', 'msys', 'cygwin'):
@@ -230,11 +347,15 @@ def get_pattern(func, params, verbose=False):
         pool.join()
 
 
-def run_pattern(item, rows, params, tables, table_name=None, rmu=None, verbose=None):
+def run_pattern(item, rows, params, tables, table_name=None, rmu=None, verbose=None, last_time=False):
     if table_name is None:
         table_name = item['src_table'][4:]
-    res = Finder.get_patterns(rows, params=params, table_name=table_name, verbose=verbose)
+    train_rows, test_rows = split_rows(rows)
 
+    res = Finder.get_patterns(train_rows, params=params, table_name=table_name, verbose=verbose)
+    pattern_to_code_mapper = get_pattern_to_code_mapper([pattern[2] if len(pattern) < 5 else pattern[4] for pattern in
+                                                         res['patterns']], [pair[3] for pair in res['patterns']])
+    check_method(pattern_to_code_mapper, test_rows)
     if rmu is not None:
         tr_eval = TransformationSetEval(tables, item, [r[2] for r in res['patterns']], SWAP_SRC_TARGET)
     else:
@@ -365,7 +486,7 @@ def pt_print(res, filename, row_matcher, tr_eval):
         print(f"Results for {filename}", file=f)
         if tr_eval is not None:
             print(f"Coverage in golden matched rows: {tr_eval.covered}/{len(tr_eval.inp_pat)} = %.2f%%" % (
-                        tr_eval.covered * 100 / len(tr_eval.inp_pat)), file=f)
+                    tr_eval.covered * 100 / len(tr_eval.inp_pat)), file=f)
             print(f"Best pattern Coverage  in golden matched rows: %.2f%%" % (tr_eval.best_pattern_coverage * 100),
                   file=f)
 
@@ -481,7 +602,7 @@ def aj_print(res, filename, row_matcher, tr_eval):
         print(f"Results for {filename}", file=f)
         if tr_eval is not None:
             print(f"Coverage in golden matched rows: {tr_eval.covered}/{len(tr_eval.inp_pat)} = %.2f%%" % (
-                        tr_eval.covered * 100 / len(tr_eval.inp_pat)), file=f)
+                    tr_eval.covered * 100 / len(tr_eval.inp_pat)), file=f)
             print(f"Best pattern Coverage  in golden matched rows: %.2f%%" % (tr_eval.best_pattern_coverage * 100),
                   file=f)
         print(f"Coverage: {res['covered']}/{res['input_len']} = %.2f%%" % (res['covered'] * 100 / res['input_len']),
@@ -540,7 +661,7 @@ def row_matching_test(n_start_from=2, n_start_to=25, file_write=True):
             print(f"Matching rows for '{item['src_table']}' ...")
 
             rows, is_swapped = matcher.get_matching_rows_for_table(tables, item, n_start, ROW_MATCHING_N_END,
-                                                         swap_src_target=SWAP_SRC_TARGET)
+                                                                   swap_src_target=SWAP_SRC_TARGET)
             new_rows = {}
             for src, target in rows.items():
                 new_rows[src] = [[t, t] for t in target]
@@ -616,7 +737,7 @@ if __name__ == '__main__':
 
     OUTPUT_DIR = OUTPUT_PATH + f"{METHOD}_{DATASET}_{'GL' if GOLDEN_ROWS else 'RM'}/"
     OUTPUT_FILE = OUTPUT_DIR + '_res.csv'
-
+    NUM_PROCESSORS = 1
     NUM_PROCESSORS = multiprocessing.cpu_count() // 2 if NUM_PROCESSORS == 0 else NUM_PROCESSORS
 
     if OVERRIDE:

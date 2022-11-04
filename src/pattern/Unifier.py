@@ -22,6 +22,7 @@ def generate_similar_patterns(all_patterns, rows, generalize, verbose=True):
     for inp, outs in rows.items():
         for out in outs:
             inputs.append((inp, out))
+    # input = [(src, target), ...]
     inp_pat = [set() for i in range(len(inputs))]
 
 
@@ -37,7 +38,6 @@ def generate_similar_patterns(all_patterns, rows, generalize, verbose=True):
         wrongs = set()  # MUST be mutable
 
         for pat_idx, pattern in enumerate(patterns):
-
             if generalize:
                 o = pattern.apply_get_single_diff_block(inp[0], inp[1])
                 if o[0] == inp[1]:

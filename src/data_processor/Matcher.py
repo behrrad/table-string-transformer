@@ -230,6 +230,7 @@ def get_matching_rows_golden(tables, cols, swap_src_target=False):
     assert cols['src_table'].startswith('src') or cols['src_table'].startswith('target')
     assert cols['target_table'].startswith('src') or cols['target_table'].startswith('target')
 
+    # src_type = src, src_tbl = us cities
     src_type, src_tbl = cols['src_table'].split('_', 1)
     target_type, target_tbl = cols['target_table'].split('_', 1)
 
@@ -250,7 +251,7 @@ def get_matching_rows_golden(tables, cols, swap_src_target=False):
         for item in target_tab['items']:
             if item[cols['target_row_id']] not in target:
                 target.add(item[cols['target_row_id']])
-
+        # src = list hameye input ha, target = list hameye target ha
         src = list(src)
         target = list(target)
 

@@ -20,6 +20,8 @@ DEF_PARAMS = {
     'switch_literals_placeholders': False,  # Replace placeholder with literals and add them as new pattern
     'only_first_match': False,  # Take only first match for the placeholder or look for all of possible matches.
 }
+KOL = 0
+KOL_JADID = 0
 
 
 def get_patterns(rows, params={}, table_name='', verbose=True):
@@ -77,7 +79,7 @@ def get_patterns(rows, params={}, table_name='', verbose=True):
     else:
         all_patterns = all_patterns_list
 
-    print(f"{table_name} --> {cnt_placeholder_comb:,} Place holder comb. and {cnt_all_patterns:,} total transformations. {cnt_dup_patterns_removed:,} duplicate removed, {len(all_patterns):,} remaining.")
+    # print(f"{table_name} --> {cnt_placeholder_comb:,} Place holder comb. and {cnt_all_patterns:,} total transformations. {cnt_dup_patterns_removed:,} duplicate removed, {len(all_patterns):,} remaining.")
     duplicate_pat_remove_time_end = time.time()
 
     inputs, pat_inp, inp_pat, patterns, gen_time, effective_gens, pattern_counts =\
@@ -92,13 +94,31 @@ def get_patterns(rows, params={}, table_name='', verbose=True):
     ####
 
     # print transformations
-    if verbose:
-        for res in final_res:
-            print(f"id: {res[0]}, covered:{res[1]}/{len(inputs)}, pattern: {res[2]}")
-            # for ip in pat_inp[res[0]]:
-            #     print(f"   |-> '{inputs[ip][0]}' -> '{inputs[ip][1]}'")
-
-
+    # if verbose:
+    # for res in final_res:
+    #     # print(f"id: {res[0]}, covered:{res[1]}/{len(inputs)}, pattern: {res[2]}")
+    #     output = []
+    #     duplicate = 0
+    #     total = 0
+    #     for el in res[3]:
+    #         src = list(el)[0].replace(" ", "")
+    #         for li in pairs[table_name]:
+    #             if li[0] == src:
+    #                 total += 1
+    #                 if li[2] in output:
+    #                     duplicate += 1
+    #                     break
+    #                 output.append(li[2])
+    #                 break
+    #     # print("Tedad run shodan code dar halate ghabl: " + str(total) + "\n: Jadid" + str(total - duplicate))
+    #     global KOL, KOL_JADID
+    #     KOL += total
+    #     KOL_JADID += total - duplicate
+    #     # print("halate ghabl: " + str(KOL))
+    #     # print("halate jadid: " + str(KOL_JADID))
+    #     # print("^" * 10)
+    #         # for ip in pat_inp[res[0]]:
+    #         #     print(f"   |-> '{inputs[ip][0]}' -> '{inputs[ip][1]}'")
 
     return {
         'patterns': final_res,
