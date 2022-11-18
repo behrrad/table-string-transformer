@@ -1,4 +1,6 @@
 import argparse
+import ast
+from copy import deepcopy
 import json
 import multiprocessing
 import os
@@ -17,9 +19,12 @@ from pattern import Finder
 
 from Transformation.Blocks.LiteralPatternBlock import LiteralPatternBlock
 from Transformation.Blocks.PositionPatternBlock import PositionPatternBlock
-from Transformation.Blocks.TokenPatternBlock import TokenPatternBlock
+from Transformation.Blocks.RawPatternBlock import RawPatternBlock
+from Transformation.Blocks.SplitSplitSubstrPatternBlock import SplitSplitSubstrPatternBlock
 from Transformation.Blocks.SplitSubstrPatternBlock import SplitSubstrPatternBlock
+from Transformation.Blocks.TokenPatternBlock import TokenPatternBlock
 from Transformation.Blocks.TwoCharSplitSubstrPatternBlock import TwoCharSplitSubstrPatternBlock
+from Transformation.Pattern import Pattern
 
 import pathlib
 
@@ -73,6 +78,9 @@ ROW_MATCHING_N_END = 20
 
 CNT_CUR = multiprocessing.Value('i', 0)
 CNT_ALL = 0
+PATTERN_TO_CODE_MAPPER = {}
+SUCCESS = 0
+TOTAL = 0
 
 
 def lcs(s1, s2):
@@ -151,10 +159,8 @@ def update_mapper(pattern, pairs, mapper):
 
 def get_pattern_to_code_mapper(patterns, pairs):
     assert len(patterns) == len(pairs)
-    pattern_to_code_mapper = {}
     for idx in range(len(patterns)):
-        update_mapper(patterns[idx], pairs[idx], pattern_to_code_mapper)
-    return pattern_to_code_mapper
+        update_mapper(patterns[idx], pairs[idx], PATTERN_TO_CODE_MAPPER)
 
 
 def split_rows(rows):
@@ -162,7 +168,7 @@ def split_rows(rows):
     test_rows = {}
     for row in rows:
         rnd = random.random()
-        if rnd > 0.3:
+        if rnd > 0.25:
             train_rows[row] = rows[row]
         else:
             test_rows[row] = rows[row]
@@ -180,13 +186,19 @@ def find_pattern_for_pair(pattern_to_code_mapper, src, target):
 
 
 def check_method(pattern_to_code_mapper, test_rows):
+    global SUCCESS, TOTAL
     success = 0
     for row in test_rows:
         for i in range(len(list(test_rows[row]))):
-            success += find_pattern_for_pair(pattern_to_code_mapper, row, list(test_rows[row])[i])
-    print("success: " + str(success))
-    print("total: " + str(len(test_rows)))
-    print("success rate: " + str(success/len(test_rows)*100) + "%")
+            score = find_pattern_for_pair(pattern_to_code_mapper, row, list(test_rows[row])[i])
+            success += score
+            if score:
+                break
+    SUCCESS += success
+    TOTAL += len(test_rows)
+    # print("success: " + str(success))
+    # print("total: " + str(len(test_rows)))
+    # print("success rate: " + str(success/len(test_rows)*100) + "%")
 
 
 def get_pattern(func, params, verbose=False):
@@ -352,10 +364,19 @@ def run_pattern(item, rows, params, tables, table_name=None, rmu=None, verbose=N
         table_name = item['src_table'][4:]
     train_rows, test_rows = split_rows(rows)
 
+    # if table_name != 'us cities':
+    #     return
+
     res = Finder.get_patterns(train_rows, params=params, table_name=table_name, verbose=verbose)
-    pattern_to_code_mapper = get_pattern_to_code_mapper([pattern[2] if len(pattern) < 5 else pattern[4] for pattern in
-                                                         res['patterns']], [pair[3] for pair in res['patterns']])
-    check_method(pattern_to_code_mapper, test_rows)
+    get_pattern_to_code_mapper([pattern[2] if len(pattern) < 5 else pattern[4] for pattern in
+                                res['patterns']], [pair[3] for pair in res['patterns']])
+    start_time = time.time()
+    check_method(PATTERN_TO_CODE_MAPPER, test_rows)
+    end_time = time.time()
+    res = Finder.get_patterns(test_rows, params=params, table_name=table_name, verbose=verbose)
+    end2_time = time.time()
+    print("1. run time: %.2f s" % (end_time - start_time))
+    print("2. run time: %.2f s" % (end2_time - end_time))
     if rmu is not None:
         tr_eval = TransformationSetEval(tables, item, [r[2] for r in res['patterns']], SWAP_SRC_TARGET)
     else:
@@ -366,12 +387,14 @@ def run_pattern(item, rows, params, tables, table_name=None, rmu=None, verbose=N
     global CNT_CUR
     with CNT_CUR.get_lock():
         CNT_CUR.value += 1
-    print(f"({CNT_CUR.value}/{CNT_ALL}) -> " + table_name)
-    print("Total run time: %.2f s" % res['runtime'])
-    print(f"{len(res['patterns'])} patterns / {res['input_len']} inputs \n-----------")
-    if verbose:
-        print(tr_eval)
-    pt_print(res, table_name, rmu, tr_eval)
+    # print(f"({CNT_CUR.value}/{CNT_ALL}) -> " + table_name)
+    # print("Total run time: %.2f s" % res['runtime'])
+    # print(f"{len(res['patterns'])} patterns / {res['input_len']} inputs \n-----------")
+    # if verbose:
+    #     print(tr_eval)
+    # pt_print(res, table_name, rmu, tr_eval)
+    print("*** SUCCESS ***" + str(SUCCESS))
+    print("*** TOTAL ***" + str(TOTAL))
 
 
 def run_aj(item, rows, params, tables, table_name=None, rmu=None, verbose=False):
@@ -691,7 +714,60 @@ def row_matching_test(n_start_from=2, n_start_to=25, file_write=True):
                 print(f"{n_start},{rme.precision},{rme.recall},{rme.f1}", file=f)
 
 
+def write_dic_to_file(dic):
+    pattern_to_code_mapper_file = open("pattern_to_code_mapper.txt", "w")
+    for code, patterns in dic.items():
+        for pattern in patterns:
+            pattern_to_code_mapper_file.write('%s\n' % code)
+            for block in pattern.blocks:
+                pattern_to_code_mapper_file.write('%s,%s\n' % (block.__class__.__name__, block.__dict__))
+            pattern_to_code_mapper_file.write('end\n')
+    pattern_to_code_mapper_file.close()
+
+
+def create_block_from_dic(data):
+    data = data.split(',', 1)
+    class_name = data[0]
+    class_data = ast.literal_eval(data[1])
+    cleaned_data = {}
+    for key in class_data:
+        if key == '_hash':
+            continue
+        cleaned_data[key[1:]] = class_data[key]
+    class_creator = globals()[class_name]
+    class_obj = class_creator(**cleaned_data)
+    return class_obj
+
+
+def update_mapper_from_dic(code, blocks):
+    pattern = Pattern(blocks)
+    if code not in PATTERN_TO_CODE_MAPPER:
+        PATTERN_TO_CODE_MAPPER[code] = []
+    PATTERN_TO_CODE_MAPPER[code].append(pattern)
+
+
+def read_dic_from_file():
+    pattern_to_code_mapper_file = open("pattern_to_code_mapper.txt", "r")
+    lines = pattern_to_code_mapper_file.readlines()
+    we_have_code = False
+    code = 0
+    blocks = []
+    for line in lines:
+        line = line.strip()
+        if not we_have_code:
+            we_have_code = True
+            code = line
+            blocks = []
+            continue
+        if line == 'end':
+            update_mapper_from_dic(code, blocks)
+            we_have_code = False
+            continue
+        blocks.append(create_block_from_dic(line))
+
+
 if __name__ == '__main__':
+    read_dic_from_file()
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', action='store', type=str, required=False,
                         default='', help='Path of config file')
@@ -752,3 +828,4 @@ if __name__ == '__main__':
         row_matching_test()
     else:
         raise NotImplementedError()
+    write_dic_to_file(PATTERN_TO_CODE_MAPPER)
