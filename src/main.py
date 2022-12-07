@@ -1,5 +1,6 @@
 import argparse
 import ast
+import copy
 from copy import deepcopy
 import json
 import multiprocessing
@@ -63,8 +64,9 @@ DS_PATH = BASE_PATH + '/data/autojoin-Benchmark/'
 # DS_PATH = BASE_PATH + '/data/FlashFill/'
 
 
-MULTI_CORE = True
+MULTI_CORE = False
 NUM_PROCESSORS = 0  # 0: multiprocessing.cpu_count()//2
+ROWS_WITHOUT_PATTERN_FLAG = False
 
 DO_REMAINING = True
 OVERRIDE = True
@@ -81,6 +83,8 @@ CNT_ALL = 0
 PATTERN_TO_CODE_MAPPER = {}
 SUCCESS = 0
 TOTAL = 0
+OTHER_CODE_PATTERN_FOUND = 0
+ALL_PAIRS_COUNT = 0
 
 
 def lcs(s1, s2):
@@ -168,7 +172,7 @@ def split_rows(rows):
     test_rows = {}
     for row in rows:
         rnd = random.random()
-        if rnd > 0.25:
+        if rnd > 0.66:
             train_rows[row] = rows[row]
         else:
             test_rows[row] = rows[row]
@@ -188,17 +192,44 @@ def find_pattern_for_pair(pattern_to_code_mapper, src, target):
 def check_method(pattern_to_code_mapper, test_rows):
     global SUCCESS, TOTAL
     success = 0
+    rows_without_pattern = copy.deepcopy(test_rows)
     for row in test_rows:
         for i in range(len(list(test_rows[row]))):
             score = find_pattern_for_pair(pattern_to_code_mapper, row, list(test_rows[row])[i])
             success += score
             if score:
+                del rows_without_pattern[row]
                 break
     SUCCESS += success
     TOTAL += len(test_rows)
     # print("success: " + str(success))
     # print("total: " + str(len(test_rows)))
-    # print("success rate: " + str(success/len(test_rows)*100) + "%")
+    # print("success rate: " + str(success / len(test_rows) * 100) + "%")
+    return rows_without_pattern if ROWS_WITHOUT_PATTERN_FLAG else None
+
+
+def find_other_code_patterns_for_pair(pattern_to_code_mapper, src, target):
+    pair_code = code_pair(src, target)
+    for code in pattern_to_code_mapper:
+        if pair_code == code:
+            continue
+        for pattern in pattern_to_code_mapper[code]:
+            if pattern.apply(src) == target:
+                return (code, pattern), 1
+    return None, 0
+
+
+def test_other_code_patterns(pattern_to_code_mapper, test_rows):
+    global OTHER_CODE_PATTERN_FOUND, ALL_PAIRS_COUNT
+    for row in test_rows:
+        for i in range(len(list(test_rows[row]))):
+            ALL_PAIRS_COUNT += 1
+            code_pattern, other_code_score = find_other_code_patterns_for_pair(pattern_to_code_mapper, row, list(test_rows[row])[i])
+            code_score = find_pattern_for_pair(pattern_to_code_mapper, row, list(test_rows[row])[i])
+            if other_code_score > code_score:
+                OTHER_CODE_PATTERN_FOUND += other_code_score
+                break
+    return
 
 
 def get_pattern(func, params, verbose=False):
@@ -363,17 +394,19 @@ def run_pattern(item, rows, params, tables, table_name=None, rmu=None, verbose=N
     if table_name is None:
         table_name = item['src_table'][4:]
     train_rows, test_rows = split_rows(rows)
-
     # if table_name != 'us cities':
     #     return
 
     res = Finder.get_patterns(train_rows, params=params, table_name=table_name, verbose=verbose)
     get_pattern_to_code_mapper([pattern[2] if len(pattern) < 5 else pattern[4] for pattern in
                                 res['patterns']], [pair[3] for pair in res['patterns']])
+    test_other_code_patterns(pattern_to_code_mapper=PATTERN_TO_CODE_MAPPER, test_rows=test_rows)
     start_time = time.time()
-    check_method(PATTERN_TO_CODE_MAPPER, test_rows)
+    rows_without_pattern = check_method(PATTERN_TO_CODE_MAPPER, test_rows)
     end_time = time.time()
-    res = Finder.get_patterns(test_rows, params=params, table_name=table_name, verbose=verbose)
+    if ROWS_WITHOUT_PATTERN_FLAG:
+        print(rows_without_pattern)
+    # res = Finder.get_patterns(rows_without_pattern, params=params, table_name=table_name, verbose=verbose)
     end2_time = time.time()
     print("1. run time: %.2f s" % (end_time - start_time))
     print("2. run time: %.2f s" % (end2_time - end_time))
@@ -395,6 +428,7 @@ def run_pattern(item, rows, params, tables, table_name=None, rmu=None, verbose=N
     # pt_print(res, table_name, rmu, tr_eval)
     print("*** SUCCESS ***" + str(SUCCESS))
     print("*** TOTAL ***" + str(TOTAL))
+    print("*** SUCCESS RATE: " + str(SUCCESS/TOTAL))
 
 
 def run_aj(item, rows, params, tables, table_name=None, rmu=None, verbose=False):
