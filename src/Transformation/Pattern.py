@@ -41,6 +41,9 @@ class BasicPatternBlock:
     def __hash__(self):
         return hash((self.type, self.text, self.start, self.end, self.begin_sep, self.end_sep))
 
+    def __repr__(self):
+        return self.text + " " + str(self.start) + " " + str(self.end) + " " + str(self.begin_sep) + " " + str(self.end_sep)
+
 
 class BasicPattern:
     def __init__(self, inp, goal, blocks=[]):
@@ -131,6 +134,15 @@ class BasicPattern:
         return BasicPattern(pt.inp, pt.goal, BasicPattern.blocks_merge_literals(pt.blocks))
 
     def __str__(self):
+        s = "{"
+        for b in self.blocks:
+            if b.type == BasicPatternBlock.TYPE_STR:
+                s += f"[str:{b.text}], "
+            elif b.type == BasicPatternBlock.TYPE_TOKEN:
+                s += f"[tok:{b.text}-({b.start}-{b.end})-({b.begin_sep}:{b.end_sep})], "
+        return s+"}"
+
+    def __repr__(self):
         s = "{"
         for b in self.blocks:
             if b.type == BasicPatternBlock.TYPE_STR:

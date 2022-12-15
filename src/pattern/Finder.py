@@ -7,14 +7,17 @@ from Transformation.Blocks.LiteralPatternBlock import LiteralPatternBlock
 from Transformation.Blocks.PositionPatternBlock import PositionPatternBlock
 from Transformation.Blocks.TokenPatternBlock import TokenPatternBlock
 from Transformation.Blocks.SplitSubstrPatternBlock import SplitSubstrPatternBlock
+from Transformation.Blocks.EqualPatternBlock import EqualPatternBlock
 from Transformation.Blocks.TwoCharSplitSubstrPatternBlock import TwoCharSplitSubstrPatternBlock
+
+TOTAL_PATTERNS = 0
 
 # PARAM LIST WILL BE OBTAINED FROM HERE, MUST BE UPDATED. But values are Used only when value are not passed from main
 DEF_PARAMS = {
     'max_tokens': 3,  # maximum number of allowed placeholders
     'max_blocks': 3,  # maximum number of allowed blocks (either placeholder or literal)
     'generalize': False,
-    'units_to_extract': [LiteralPatternBlock, PositionPatternBlock, TokenPatternBlock, SplitSubstrPatternBlock],  # literal must be included
+    'units_to_extract': [LiteralPatternBlock, PositionPatternBlock, TokenPatternBlock, SplitSubstrPatternBlock, EqualPatternBlock],  # literal must be included
     'token_splitters': [' ', ],  # set to None to disable. Break placeholders into other placeholders based on these chars
     'remove_duplicate_patterns': True,  # After generating all possible transformation, delete the duplicates, may take time
     'switch_literals_placeholders': False,  # Replace placeholder with literals and add them as new pattern
@@ -60,10 +63,6 @@ def get_patterns(rows, params={}, table_name='', verbose=True):
                                                        placeholder_stats)
 
     placeholder_gen_time_end = time.time()
-
-
-
-
     # Get all patterns
     all_patterns_list = Extracter.extract_patterns(rows, all_basic_patterns, params['units_to_extract'], verbose)
 
@@ -88,37 +87,16 @@ def get_patterns(rows, params={}, table_name='', verbose=True):
 
     # Get covering set
     final_res = Unifier.get_covering_set(inputs, pat_inp, patterns, verbose)
-
-    end_time = time.time()
-
-    ####
-
-    # print transformations
-    # if verbose:
     # for res in final_res:
-    #     # print(f"id: {res[0]}, covered:{res[1]}/{len(inputs)}, pattern: {res[2]}")
-    #     output = []
-    #     duplicate = 0
-    #     total = 0
-    #     for el in res[3]:
-    #         src = list(el)[0].replace(" ", "")
-    #         for li in pairs[table_name]:
-    #             if li[0] == src:
-    #                 total += 1
-    #                 if li[2] in output:
-    #                     duplicate += 1
-    #                     break
-    #                 output.append(li[2])
-    #                 break
-    #     # print("Tedad run shodan code dar halate ghabl: " + str(total) + "\n: Jadid" + str(total - duplicate))
-    #     global KOL, KOL_JADID
-    #     KOL += total
-    #     KOL_JADID += total - duplicate
-    #     # print("halate ghabl: " + str(KOL))
-    #     # print("halate jadid: " + str(KOL_JADID))
-    #     # print("^" * 10)
-    #         # for ip in pat_inp[res[0]]:
-    #         #     print(f"   |-> '{inputs[ip][0]}' -> '{inputs[ip][1]}'")
+    #     print(res[2])
+    #     print(res[3])
+    #     if len(res) == 5:
+    #         print(res[4])
+    #     print("-" * 5)
+    print(len(final_res))
+    global TOTAL_PATTERNS
+    TOTAL_PATTERNS += len(final_res)
+    end_time = time.time()
 
     return {
         'patterns': final_res,

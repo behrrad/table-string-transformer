@@ -121,15 +121,14 @@ def get_covering_set(inputs, pat_inp, patterns, verbose=True):
         max_len = -1
         max_idx = None
         for idx, s in enumerate(pat_inp):
-            if len(s - covered) > max_len:
-                max_len = len(s - covered)
+            if len(s - covered) * (len(inputs) + 1) + len(s) > max_len:
+                max_len = len(s - covered) * (len(inputs) + 1) + len(s)
                 max_idx = idx
         # subset = max(pat_inp, key=lambda s: len(s - covered))
 
         subset = pat_inp[max_idx]
         cover.append(max_idx)
         covered |= subset
-
     if verbose:
         print("Done! Just replacing single coverage patterns with literals...")
 
@@ -139,7 +138,6 @@ def get_covering_set(inputs, pat_inp, patterns, verbose=True):
                     merge_literals(patterns[idx]),
                     [inputs[i] for i in pat_inp[idx]]
                   ) for idx in cover]
-
 
     for idx, res in enumerate(final_res):
         if res[1] == 1:

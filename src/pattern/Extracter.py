@@ -21,9 +21,17 @@ def extract_patterns(rows, patterns, patterns_to_extract, verbose=True):
                 tmp = set()
 
                 for pat in patterns_to_extract:
-                    tmp.update(pat.extract(pattern.inp, blk))
-
+                    x = pat.extract(pattern.inp, blk)
+                    # print(x)
+                    # print('!' * 4)
+                    tmp.update(x)
                 candidates.append(list(tmp))
+                # print(tmp)
+                # print(pattern.inp)
+                # print(pattern.goal)
+                # print(blk)
+                # print(blk.text[0])
+                # print("****")
             else:
                 raise Exception('App must not enter here')
 

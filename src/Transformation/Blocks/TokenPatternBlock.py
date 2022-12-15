@@ -13,7 +13,6 @@ class TokenPatternBlock (RawPatternBlock):
         self.splitter = splitter
         self.index = index
 
-
     def update_hash(self):
         if type(self.index) == list:
             return 1
@@ -47,6 +46,9 @@ class TokenPatternBlock (RawPatternBlock):
                     s += tmp[ind] + self.splitter
                 s = s[:-1]  # remove last extra splitter
             else:
+                if self.index < 0:
+                    tmp = inp.split(self.splitter, self.index * -1)
+                    return tmp[-1]
                 s += tmp[self.index]
         except IndexError:
             raise IndexError("Split index not in the array")
@@ -89,6 +91,10 @@ class TokenPatternBlock (RawPatternBlock):
 
         sp = blk.begin_sep
         if sp is not None:
+            for i in range(1, len(inp.split(sp))):
+                new_patt = inp.split(sp, i)
+                if new_patt[-1] == blk.text:
+                    tmp.add(TokenPatternBlock(sp, -1 * i))
             parts = inp.split(sp)
             if sp not in blk.text:
                 for idx, part in enumerate(parts):

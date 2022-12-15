@@ -25,6 +25,7 @@ from Transformation.Blocks.SplitSplitSubstrPatternBlock import SplitSplitSubstrP
 from Transformation.Blocks.SplitSubstrPatternBlock import SplitSubstrPatternBlock
 from Transformation.Blocks.TokenPatternBlock import TokenPatternBlock
 from Transformation.Blocks.TwoCharSplitSubstrPatternBlock import TwoCharSplitSubstrPatternBlock
+from Transformation.Blocks.EqualPatternBlock import EqualPatternBlock
 from Transformation.Pattern import Pattern
 
 import pathlib
@@ -47,7 +48,7 @@ PT_PARAMS = {
     'switch_literals_placeholders': True,  # Replace placeholder with literals and add them as new pattern
     'only_first_match': False,  # Take only first match for the placeholder or look for all of possible matches.
 
-    'units_to_extract': [LiteralPatternBlock, PositionPatternBlock, TokenPatternBlock, SplitSubstrPatternBlock],
+    'units_to_extract': [LiteralPatternBlock, PositionPatternBlock, TokenPatternBlock, SplitSubstrPatternBlock, EqualPatternBlock],
     # literal must be included
     # 'units_to_extract': [LiteralPatternBlock, PositionPatternBlock, TokenPatternBlock, SplitSubstrPatternBlock, TwoCharSplitSubstrPatternBlock],  # not including literal
 
@@ -85,6 +86,7 @@ SUCCESS = 0
 TOTAL = 0
 OTHER_CODE_PATTERN_FOUND = 0
 ALL_PAIRS_COUNT = 0
+TABLE_NUMBER = 0
 
 
 def lcs(s1, s2):
@@ -172,7 +174,7 @@ def split_rows(rows):
     test_rows = {}
     for row in rows:
         rnd = random.random()
-        if rnd > 0.66:
+        if rnd > 0.3:
             train_rows[row] = rows[row]
         else:
             test_rows[row] = rows[row]
@@ -202,6 +204,9 @@ def check_method(pattern_to_code_mapper, test_rows):
                 break
     SUCCESS += success
     TOTAL += len(test_rows)
+    print("Success: " + str(success))
+    print("Total: " + str(len(test_rows)))
+    print("---" * 2)
     # print("success: " + str(success))
     # print("total: " + str(len(test_rows)))
     # print("success rate: " + str(success / len(test_rows) * 100) + "%")
@@ -230,6 +235,16 @@ def test_other_code_patterns(pattern_to_code_mapper, test_rows):
                 OTHER_CODE_PATTERN_FOUND += other_code_score
                 break
     return
+
+
+def get_rows_without_pattern(pattern_to_code_mapper, rows):
+    final_rows = {}
+    for inp in rows:
+        out = list(rows[inp])[0]
+        res = find_pattern_for_pair(pattern_to_code_mapper, inp, out)
+        if not res:
+            final_rows.update({inp: {out}})
+    return final_rows
 
 
 def get_pattern(func, params, verbose=False):
@@ -391,25 +406,35 @@ def get_pattern(func, params, verbose=False):
 
 
 def run_pattern(item, rows, params, tables, table_name=None, rmu=None, verbose=None, last_time=False):
+    global TABLE_NUMBER
+    TABLE_NUMBER += 1
+    # if TABLE_NUMBER != 30:
+    #     return
     if table_name is None:
         table_name = item['src_table'][4:]
+    # if table_name != 'texas govs 1':
+    #     return
     train_rows, test_rows = split_rows(rows)
+    # if table_name != 'texas govs 1':
+    #     return
     # if table_name != 'us cities':
     #     return
-
+    train_rows = get_rows_without_pattern(PATTERN_TO_CODE_MAPPER, train_rows)
+    # print(train_rows)
     res = Finder.get_patterns(train_rows, params=params, table_name=table_name, verbose=verbose)
     get_pattern_to_code_mapper([pattern[2] if len(pattern) < 5 else pattern[4] for pattern in
                                 res['patterns']], [pair[3] for pair in res['patterns']])
-    test_other_code_patterns(pattern_to_code_mapper=PATTERN_TO_CODE_MAPPER, test_rows=test_rows)
-    start_time = time.time()
+    # test_other_code_patterns(pattern_to_code_mapper=PATTERN_TO_CODE_MAPPER, test_rows=test_rows)
+    # start_time = time.time()
+    print(table_name)
     rows_without_pattern = check_method(PATTERN_TO_CODE_MAPPER, test_rows)
-    end_time = time.time()
-    if ROWS_WITHOUT_PATTERN_FLAG:
-        print(rows_without_pattern)
+    # end_time = time.time()
+    # if ROWS_WITHOUT_PATTERN_FLAG:
+    #     print(rows_without_pattern)
     # res = Finder.get_patterns(rows_without_pattern, params=params, table_name=table_name, verbose=verbose)
     end2_time = time.time()
-    print("1. run time: %.2f s" % (end_time - start_time))
-    print("2. run time: %.2f s" % (end2_time - end_time))
+    # print("1. run time: %.2f s" % (end_time - start_time))
+    # print("2. run time: %.2f s" % (end2_time - end_time))
     if rmu is not None:
         tr_eval = TransformationSetEval(tables, item, [r[2] for r in res['patterns']], SWAP_SRC_TARGET)
     else:
@@ -426,9 +451,9 @@ def run_pattern(item, rows, params, tables, table_name=None, rmu=None, verbose=N
     # if verbose:
     #     print(tr_eval)
     # pt_print(res, table_name, rmu, tr_eval)
-    print("*** SUCCESS ***" + str(SUCCESS))
-    print("*** TOTAL ***" + str(TOTAL))
-    print("*** SUCCESS RATE: " + str(SUCCESS/TOTAL))
+    # print("*** SUCCESS ***" + str(SUCCESS))
+    # print("*** TOTAL ***" + str(TOTAL))
+    # print("*** SUCCESS RATE: " + str(SUCCESS/TOTAL))
 
 
 def run_aj(item, rows, params, tables, table_name=None, rmu=None, verbose=False):
@@ -801,7 +826,7 @@ def read_dic_from_file():
 
 
 if __name__ == '__main__':
-    read_dic_from_file()
+    # read_dic_from_file()
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', action='store', type=str, required=False,
                         default='', help='Path of config file')
@@ -862,4 +887,12 @@ if __name__ == '__main__':
         row_matching_test()
     else:
         raise NotImplementedError()
-    write_dic_to_file(PATTERN_TO_CODE_MAPPER)
+    # write_dic_to_file(PATTERN_TO_CODE_MAPPER)
+    print(Finder.TOTAL_PATTERNS)
+# 432 without method
+# 426 without method with new pattern
+# 397 with method
+# 392 with method and new pattern
+# 423 pattern jadid tar without method
+# 389 with method with new patterns
+

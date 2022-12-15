@@ -7,7 +7,6 @@ from Transformation.Pattern import BasicPattern, BasicPatternBlock
 
 
 def get_placeholders(rows, max_tokens, token_splitters=None, verbose=True, options={}, stats={}):
-
     # In addition to breaking all blocks at the same time, each block will be broken separately too
     break_each_block_separate = False
     if 'break_each_block_separate' in options:
@@ -45,13 +44,15 @@ def get_placeholders(rows, max_tokens, token_splitters=None, verbose=True, optio
             stats_pat = {'cnt_removed': 0}
             stats_spt = {'cnt_removed': 0}
 
-            res = extract_placeholder_patterns(inp, out, max_tokens, max_blocks, add_literals, only_first_match, stats_pat)
+            res = extract_placeholder_patterns(inp, out, max_tokens, max_blocks, add_literals, only_first_match,
+                                               stats_pat)
             sum_init_pat += len(res)
             sum_removed_init_pat += stats_pat['cnt_removed']
 
             split_res = set()
             if token_splitters is not None:
-                split_res = split_placeholders(res, token_splitters, inp, max_tokens, max_blocks, break_each_block_separate, stats_spt)
+                split_res = split_placeholders(res, token_splitters, inp, max_tokens, max_blocks,
+                                               break_each_block_separate, stats_spt)
 
             sum_spt_pat += len(split_res)
             sum_removed_splitted_pat += stats_spt['cnt_removed']
@@ -78,8 +79,8 @@ def get_placeholders(rows, max_tokens, token_splitters=None, verbose=True, optio
     # if verbose:
     #     print(f"{sum_init_pat} init patterns + {sum_spt_pat} splitted patterns = {sum_init_pat+sum_spt_pat}, {len(all_patterns)} unique, extracted from {cnt} input rows")
 
-
-    stats['cnt_all_generated_placeholder_comb'] = sum_init_pat+sum_spt_pat+sum_removed_init_pat + sum_removed_splitted_pat
+    stats[
+        'cnt_all_generated_placeholder_comb'] = sum_init_pat + sum_spt_pat + sum_removed_init_pat + sum_removed_splitted_pat
     stats['cnt_all_remaining_placeholder_comb'] = sum_init_pat + sum_spt_pat
     stats['cnt_all_removed_placeholder_comb'] = sum_removed_init_pat + sum_removed_splitted_pat
     stats['cnt_init_remaining_placeholder_comb'] = sum_init_pat
@@ -90,11 +91,9 @@ def get_placeholders(rows, max_tokens, token_splitters=None, verbose=True, optio
     return all_patterns
 
 
-
 def split_placeholders(res, token_splitters, inp, max_tokens, max_blocks, break_each_block_separate, stats={}):
     split_res = set()
     cnt_removed = 0
-
     for parent in res:
         pat = copy.deepcopy(parent)
         added_blocks = 0
@@ -137,7 +136,6 @@ def extract_placeholder_patterns(inp, out, max_tokens, max_blocks, add_literals=
     # Add the basic literal
     final_pattern_pile.add(BasicPattern(inp, out, [BasicPatternBlock(out, BasicPatternBlock.TYPE_STR)]))
 
-
     pts = extract_non_overlap_placeholder(inp, out, max_tokens, max_blocks, add_literals, only_first_match)
 
     cnt_removed = 0
@@ -174,14 +172,12 @@ def extract_non_overlap_placeholder(inp, out, max_tokens, max_blocks, add_litera
         else:
             matches = [m.start() for m in re.finditer('(?='+re.escape(txt)+')', inp)]
 
-
         pats = []
         for m in matches:
             begin_sep = None if m == 0 else inp[m - 1]
             end_sep = None if m + match.size == len(inp) else inp[m + match.size]
 
             pats.append(BasicPatternBlock(txt, BasicPatternBlock.TYPE_TOKEN, m, m + match.size, begin_sep, end_sep))
-
 
         if add_literals:
             pats.append(BasicPatternBlock(txt, BasicPatternBlock.TYPE_STR))
@@ -201,8 +197,8 @@ def extract_non_overlap_placeholder(inp, out, max_tokens, max_blocks, add_litera
                         res.append(tt)
                     # res.append(BasicPattern.blocks_merge_literals(t))
 
-
         return res
+
 
 ''''@TODO: Has bug if we have two placeholders with same size: e.g.
 'arash dargahi nobari': ['arash d. nobari']:
